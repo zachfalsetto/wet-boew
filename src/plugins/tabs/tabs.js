@@ -17,6 +17,7 @@ var componentName = "wb-tabs",
 	selector = "." + componentName,
 	initEvent = "wb-init" + selector,
 	shiftEvent = "wb-shift" + selector,
+	selectEvent = "wb-select" + selector,
 	updatedEvent = "wb-updated" + selector,
 	setFocusEvent = "setfocus.wb",
 	controls = selector + " [role=tablist] a, " + selector + " [role=tablist] .tab-count",
@@ -26,6 +27,7 @@ var componentName = "wb-tabs",
 	equalHeightOffClass = equalHeightClass + "-off",
 	activePanel = "-activePanel",
 	activateEvent = "click keydown",
+	pagePath = wb.pageUrlParts.pathname + "#",
 	$document = wb.doc,
 	$window = wb.win,
 	i18n, i18nText,
@@ -54,7 +56,7 @@ var componentName = "wb-tabs",
 			open = "open",
 			$panels, $tablist, activeId, $openPanel, $elm, elmId,
 			settings, $panel, i, len, tablist, isOpen,
-			newId, positionY, groupClass;
+			newId, positionY, groupClass, $tabPanels;
 
 		if ( elm ) {
 			$elm = $( elm );
@@ -97,7 +99,7 @@ var componentName = "wb-tabs",
 				// If the panel was not set by URL hash, then attempt to
 				// retrieve from sessionStorage
 				if ( !$openPanel || $openPanel.length === 0 ) {
-					activeId = sessionStorage.getItem( elmId + activePanel );
+					activeId = sessionStorage.getItem( pagePath + elmId + activePanel );
 					if ( activeId ) {
 						$openPanel = $panels.filter( "#" + activeId );
 					}
@@ -106,7 +108,7 @@ var componentName = "wb-tabs",
 				} else {
 					hashFocus = true;
 					try {
-						sessionStorage.setItem( elmId + activePanel, activeId );
+						sessionStorage.setItem( pagePath + elmId + activePanel, activeId );
 					} catch ( error ) {
 					}
 				}
@@ -122,7 +124,7 @@ var componentName = "wb-tabs",
 				i18nText = {
 					prev: i18n( "prv" ),
 					next: i18n( "nxt" ),
-					play: i18n( "play" ),
+					play: i18n( "tab-play" ),
 					rotStart: i18n( "tab-rot" ).on,
 					rotStop: i18n( "tab-rot" ).off,
 					space: i18n( "space" ),
@@ -136,8 +138,11 @@ var componentName = "wb-tabs",
 			if ( !isCarousel ) {
 				$elm.addClass( "tabs-acc" );
 				groupClass = elmId + "-grp";
-				$panels = $elm.find( "> .tabpanels > details" );
+				$tabPanels = $elm.children( ".tabpanels" );
+				$panels = $tabPanels.children( "details" );
 				len = $panels.length;
+
+				$tabPanels.detach();
 
 				// Ensure there is only one panel open
 				// Order of priority is hash, open property, first details
@@ -181,7 +186,7 @@ var componentName = "wb-tabs",
 							open: open
 						});
 						$panel.addClass( ( Modernizr.details ? "" :  open + " " ) +
-							"fade " + ( isOpen ? "in" : "out" ) );
+							"fade " + ( isOpen ? "in" : "out wb-inv" ) );
 					}
 
 					tablist += "<li" + ( isOpen ? " class='active'" : "" ) +
@@ -190,13 +195,15 @@ var componentName = "wb-tabs",
 				}
 
 				$tablist = $( tablist + "</ul>" );
+				$tabPanels.find( "> details > summary" )
+					.addClass( "wb-toggle tgl-tab" )
+					.attr( "data-toggle", "{\"parent\": \"#" + elmId +
+						"\", \"group\": \"." + groupClass + "\"}" );
+
 				$elm
 					.prepend( $tablist )
-					.find( "> .tabpanels > details > summary" )
-						.addClass( "wb-toggle tgl-tab" )
-						.attr( "data-toggle", "{\"parent\": \"#" + elmId +
-							"\", \"group\": \"." + groupClass + "\"}" )
-						.trigger( "wb-init.wb-toggle" );
+					.append( $tabPanels )
+					.trigger( "wb-init.wb-toggle" );
 			} else if ( $openPanel && $openPanel.length !== 0 ) {
 				$panels.filter( ".in" )
 					.addClass( "out" )
@@ -247,7 +254,7 @@ var componentName = "wb-tabs",
 			});
 
 			initialized = true;
-			onResize();
+			onResize( $elm );
 
 			// Identify that initialization has completed
 			wb.ready( $elm, componentName );
@@ -337,7 +344,7 @@ var componentName = "wb-tabs",
 			listItems = $tabList.children().get(),
 			listCounter = listItems.length - 1,
 			isDetails = $panels[ 0 ].nodeName.toLowerCase() === "details",
-			isActive, item, link;
+			isActive, item, link, panelId;
 
 		$panels.attr( "tabindex", "-1" );
 
@@ -358,10 +365,13 @@ var componentName = "wb-tabs",
 			isActive = item.className.indexOf( "active" ) !== -1;
 
 			link = item.getElementsByTagName( "a" )[ 0 ];
+			panelId = link.getAttribute( "href" ).substring( 1 );
+
 			link.tabIndex = isActive ? "0" : "-1";
 			link.setAttribute( "role", "tab" );
 			link.setAttribute( "aria-selected", isActive ? "true" : "false" );
-			link.setAttribute( "aria-controls", link.getAttribute( "href" ).substring( 1 ) );
+			link.setAttribute( "aria-controls", panelId );
+			link.id = panelId + "-lnk";
 		}
 		$tabList.attr( "aria-live", "off" );
 	},
@@ -436,7 +446,7 @@ var componentName = "wb-tabs",
 		// Update sessionStorage with the current active panel
 		try {
 			sessionStorage.setItem(
-				$container.attr( "id" ) + activePanel,
+				pagePath + $container.attr( "id" ) + activePanel,
 				$next.attr( "id" )
 			);
 		} catch ( error ) {
@@ -468,17 +478,28 @@ var componentName = "wb-tabs",
 	onShift = function( event, $elm ) {
 		var data = $elm.data( componentName ),
 			$panels = data.panels,
-			$controls = data.tablist,
 			len = $panels.length,
 			current = $elm.find( "> .tabpanels > .in" ).prevAll( "[role=tabpanel]" ).length,
-			shiftto = event.shiftto ? event.shiftto : 1,
-			next = current > len ? 0 : current + shiftto,
-			$next = $panels.eq( ( next > len - 1 ) ? 0 : ( next < 0 ) ? len - 1 : next );
+			next = current > len ? 0 : current + ( event.shiftto ? event.shiftto : 1 );
 
-		updateNodes(
-			$panels, $controls, $next,
-			$controls.find( "[href=#" + $next.attr( "id" ) + "]" )
-		);
+		onSelect( $panels[( next > len - 1 ) ? 0 : ( next < 0 ) ? len - 1 : next ].id );
+	},
+
+	/**
+	 * @method onSelect
+	 * @param (string) id Id attribute of the panel
+	 */
+	onSelect = function( id ) {
+		var panelSelector = "#" + id,
+			$panel = $( panelSelector );
+
+		if ( isSmallView && $panel[ 0 ].nodeName.toLowerCase() === "details" ) {
+			$panel.children( "summary" ).trigger( $panel.attr( "open" ) ? setFocusEvent : "click" );
+		} else {
+			$( panelSelector + "-lnk" )
+				.trigger( "click" )
+				.trigger( setFocusEvent );
+		}
 	},
 
 	/**
@@ -518,83 +539,100 @@ var componentName = "wb-tabs",
 		}
 	},
 
-	onResize = function() {
-		var $elm, $details, $tablist, $openDetails,
-			$nonOpenDetails, $active, $summary;
+	/**
+	 * @method onResize
+	 * @param {jQuery Object} $currentElm Element being initialized (only during initialization process).
+	 */
+	onResize = function( $currentElm ) {
+		var $elms, $elm, $tabPanels, $details, $tablist, $openDetails, openDetailsId,
+			$nonOpenDetails, $active, $summary, i, len;
 
 		if ( initialized ) {
 			isSmallView = document.documentElement.className.indexOf( smallViewPattern ) !== -1;
-			$elm = $( selector );
-			$details = $elm.find( "> .tabpanels > details" );
-			if ( $details.length !== 0 ) {
-				if ( isSmallView !== oldIsSmallView ) {
-					$summary = $details.children( "summary" );
-					$tablist = $elm.children( "ul" );
 
-					// Disable equal heights for small view
-					if ( $elm.attr( "class" ).indexOf( equalHeightClass ) !== -1 ) {
-						$elm.toggleClass( equalHeightClass + " " + equalHeightOffClass );
-					}
+			if ( isSmallView !== oldIsSmallView ) {
+				$elms = $currentElm.length ? $currentElm : $( selector );
+				len = $elms.length;
 
-					if ( isSmallView ) {
+				for ( i = 0; i !== len; i += 1 ) {
+					$elm = $elms.eq( i );
+					$tabPanels = $elm.children( ".tabpanels" );
+					$details = $tabPanels.children( "details" );
 
-						// Switch to small view
-						$active = $tablist.find( ".active a" );
-						$details
-							.removeAttr( "role aria-expanded aria-hidden" )
-							.removeClass( "fade out in" );
-						$openDetails = $details
-											.filter( "#" + $active.attr( "href" ).substring( 1 ) )
-												.attr( "open", "open" )
-												.addClass( "open" );
-						$nonOpenDetails = $details.not( $openDetails )
-													.removeAttr( "open" )
-													.removeClass( "open" );
-					} else if ( oldIsSmallView ) {
+					if ( $details.length !== 0 ) {
+						$tabPanels.detach();
+						$summary = $details.children( "summary" );
+						$tablist = $elm.children( "ul" );
 
-						// Switch to large view
-						$openDetails = $details.filter( "[open]" );
-						$openDetails = ( $openDetails.length === 0 ? $details : $openDetails ).eq( 0 );
+						if ( isSmallView ) {
 
-						$details
-							.attr({
-								role: "tabpanel",
-								open: "open"
-							})
-							.not( $openDetails )
-								.addClass( "fade out" )
+							// Switch to small view
+							$active = $tablist.find( ".active a" );
+							$details
+								.removeAttr( "role aria-expanded aria-hidden" )
+								.removeClass( "fade out in" );
+							$openDetails = $details
+												.filter( "#" + $active.attr( "href" ).substring( 1 ) )
+													.attr( "open", "open" )
+													.addClass( "open" );
+							$nonOpenDetails = $details.not( $openDetails )
+														.removeAttr( "open" )
+														.removeClass( "open" );
+						} else if ( oldIsSmallView ) {
+
+							// Switch to large view
+							$openDetails = $details.filter( "[open]" );
+							openDetailsId = $openDetails.attr( "id" );
+
+							$openDetails = ( $openDetails.length === 0 ? $details : $openDetails ).eq( 0 );
+
+							$details
 								.attr({
-									"aria-hidden": "true",
-									"aria-expanded": "false"
-								});
-
-						$openDetails
-							.addClass( "fade in" )
-							.attr({
-									"aria-hidden": "false",
-									"aria-expanded": "true"
+									role: "tabpanel",
+									open: "open"
 								})
-							.parent()
-								.find( "> ul [href$='" + $openDetails.attr( "id" ) + "']" )
-									.trigger( "click" );
-					}
+								.not( $openDetails )
+									.addClass( "fade out wb-inv" )
+									.attr({
+										"aria-hidden": "true",
+										"aria-expanded": "false"
+									});
 
-					$summary.attr( "aria-hidden", !isSmallView );
-					$tablist.attr( "aria-hidden", isSmallView );
-				} else {
+							$openDetails
+								.addClass( "fade in" )
+								.attr({
+										"aria-hidden": "false",
+										"aria-expanded": "true"
+									});
+						}
 
-					// Enable equal heights for large view
-					if ( $elm.attr( "class" ).indexOf( equalHeightClass ) !== -1 ) {
-						$elm.toggleClass( equalHeightClass + " " + equalHeightOffClass );
+						// Enable equal heights for large view or disable for small view
+						if ( isSmallView !== $elm.hasClass( equalHeightOffClass ) ) {
+							$elm.toggleClass( equalHeightClass + " " + equalHeightOffClass );
+						}
+
+						$summary.attr( "aria-hidden", !isSmallView );
+						$tablist.attr( "aria-hidden", isSmallView );
+
+						$elm.append( $tabPanels );
+
+						if ( oldIsSmallView ) {
+							$elm.find( "> ul [href$='" + openDetailsId + "']" ).trigger( "click" );
+						}
 					}
 				}
-				oldIsSmallView = isSmallView;
+
+				// Remove wb-inv from regular tabs that were used to prevent FOUC (after 300ms delay)
+				setTimeout(function() {
+					$( selector + " .tabpanels > details.wb-inv" ).removeClass( "wb-inv" );
+				}, 300 );
 			}
+			oldIsSmallView = isSmallView;
 		}
 	};
 
  // Bind the init event of the plugin
- $document.on( "timerpoke.wb " + initEvent + " " + shiftEvent, selector, function( event ) {
+ $document.on( "timerpoke.wb " + initEvent + " " + shiftEvent + " " + selectEvent, selector, function( event ) {
 	var eventTarget = event.target,
 		eventCurrentTarget = event.currentTarget,
 		$elm;
@@ -619,10 +657,17 @@ var componentName = "wb-tabs",
 				break;
 
 			/*
-			 * Change Slides
+			 * Change tab panels by a delta
 			 */
 			case "wb-shift":
 				onShift( event, $( eventTarget ) );
+				break;
+
+			/*
+			 * Select a specific tab panel
+			 */
+			case "wb-select":
+				onSelect( event.id );
 				break;
 			}
 		}
@@ -767,7 +812,7 @@ $document.on( "click keydown", selector + " [role=tabpanel]", function( event ) 
 			$( currentTarget )
 				.closest( selector )
 					.find( "[href$='#" + currentTarget.id + "']" )
-						.trigger( "setfocus.wb" );
+						.trigger( setFocusEvent );
 		}
 	}
 });
@@ -814,7 +859,7 @@ $document.on( activateEvent, selector + " > .tabpanels > details > summary", fun
 		// Update sessionStorage with the current active panel
 		try {
 			sessionStorage.setItem(
-				$details.closest( selector ).attr( "id" ) + activePanel,
+				pagePath + $details.closest( selector ).attr( "id" ) + activePanel,
 				details.id
 			);
 		} catch ( error ) {
@@ -822,6 +867,17 @@ $document.on( activateEvent, selector + " > .tabpanels > details > summary", fun
 
 		// Identify that the tabbed interface was updated
 		$details.closest( selector ).trigger( updatedEvent, [ $details ] );
+	}
+});
+
+// Change the panel based upon an external link click
+$document.on( "click", ".wb-tabs-ext", function( event ) {
+	var which = event.which;
+
+	// Ignore middle and right mouse buttons
+	if ( !which || which === 1 ) {
+		event.preventDefault();
+		onSelect( event.currentTarget.getAttribute( "href" ).substring( 1 ) );
 	}
 });
 

@@ -55,7 +55,7 @@ module.exports = (grunt) ->
 		"deploy"
 		"Build and deploy artifacts to wet-boew-dist"
 		->
-			if process.env.TRAVIS_PULL_REQUEST isnt true and process.env.DIST_REPO isnt `undefined` and ( process.env.TRAVIS_TAG isnt `undefined` or process.env.TRAVIS_BRANCH is "master" )
+			if process.env.TRAVIS_PULL_REQUEST is "false" and process.env.DIST_REPO isnt `undefined` and ( process.env.TRAVIS_TAG isnt "" or process.env.TRAVIS_BRANCH is "master" )
 				grunt.task.run [
 					"copy:deploy"
 					"gh-pages:travis"
@@ -977,6 +977,7 @@ module.exports = (grunt) ->
 					"elem_details"
 					"elem_progress_meter"
 					"mathml"
+					"cors"
 				]
 				parseFiles: false
 				matchCommunityTests: false

@@ -48,7 +48,7 @@ var componentName = "wb-mltmd",
 			if ( !i18nText ) {
 				i18n = wb.i18n;
 				i18nText = {
-					play: i18n( "play" ),
+					play: i18n( "mmp-play" ),
 					pause: i18n( "pause" ),
 					volume: i18n( "volume" ),
 					cc_on: i18n( "cc", "on" ),
@@ -888,6 +888,15 @@ $document.on( "keyup", selector, function( event ) {
 		// Allows the spacebar to be used for play/pause without double triggering
 		return false;
 	}
+});
+
+// TODO: recode with a more efficient to use the API than DOM crawling
+$document.on( "wb-activate", selector, function( event ) {
+    var playerTarget = event.currentTarget,
+        ctrls = ".wb-mm-ctrls",
+        ref = expand( playerTarget ),
+        $this = ref[ 0 ];
+    $this.find( ctrls + " .playpause" ).trigger( "click" );
 });
 
 $document.on( "durationchange play pause ended volumechange timeupdate " +
