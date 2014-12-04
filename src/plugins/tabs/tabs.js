@@ -27,6 +27,7 @@ var componentName = "wb-tabs",
 	equalHeightOffClass = equalHeightClass + "-off",
 	activePanel = "-activePanel",
 	activateEvent = "click keydown",
+	ignoreHashChange = false,
 	pagePath = wb.pageUrlParts.pathname + "#",
 	$document = wb.doc,
 	$window = wb.win,
@@ -38,7 +39,8 @@ var componentName = "wb-tabs",
 
 	defaults = {
 		excludePlay: false,
-		interval: 6
+		interval: 6,
+		updateHash: false
 	},
 
 	/**
@@ -81,6 +83,7 @@ var componentName = "wb-tabs",
 								9 : $elm.hasClass( "fast" ) ?
 									3 : defaults.interval,
 					excludePlay: $elm.hasClass( "exclude-play" ),
+					updateHash: $elm.hasClass( "update-hash" ),
 					playing: $elm.hasClass( "playing" )
 				},
 				window[ componentName ],
@@ -256,6 +259,11 @@ var componentName = "wb-tabs",
 			initialized = true;
 			onResize( $elm );
 
+			// Update the URL hash if needed
+			if ( settings.updateHash ) {
+				updateHash( $openPanel[ 0 ] );
+			}
+
 			// Identify that initialization has completed
 			wb.ready( $elm, componentName );
 		}
@@ -376,6 +384,20 @@ var componentName = "wb-tabs",
 		$tabList.attr( "aria-live", "off" );
 	},
 
+	/**
+	 * @method updateHash
+	 * @param {DOM element} elm Tabpanel to be referenced in the URL hash
+	 */
+	updateHash = function( elm ) {
+		var elmId = elm.id;
+
+		ignoreHashChange = true;
+		elm.id += "-off";
+		window.location.hash = elmId;
+		elm.id = elmId;
+		ignoreHashChange = false;
+	},
+
 	updateNodes = function( $panels, $controls, $next, $control ) {
 		var $tabs = $controls.find( "[role=tab]" ),
 			newIndex = $tabs.index( $control ) + 1,
@@ -452,6 +474,11 @@ var componentName = "wb-tabs",
 		} catch ( error ) {
 		}
 
+		// Update the URL hash if needed
+		if ( $container.data( componentName ).settings.updateHash ) {
+			updateHash( $next[ 0 ] );
+		}
+
 		// Identify that the tabbed interface/carousel was updated
 		$container.trigger( updatedEvent, [ $next ] );
 	},
@@ -482,7 +509,7 @@ var componentName = "wb-tabs",
 			current = $elm.find( "> .tabpanels > .in" ).prevAll( "[role=tabpanel]" ).length,
 			next = current > len ? 0 : current + ( event.shiftto ? event.shiftto : 1 );
 
-		onSelect( $panels[( next > len - 1 ) ? 0 : ( next < 0 ) ? len - 1 : next ].id );
+		onSelect( $panels[ ( next > len - 1 ) ? 0 : ( next < 0 ) ? len - 1 : next ].id );
 	},
 
 	/**
@@ -519,7 +546,7 @@ var componentName = "wb-tabs",
 	 * @param {jQuery Event} event Event that triggered the function call
 	 */
 	onHashChange = function( event ) {
-		if ( initialized ) {
+		if ( initialized && !ignoreHashChange ) {
 			var hash = window.location.hash,
 				$hashTarget = $( hash );
 
@@ -532,8 +559,9 @@ var componentName = "wb-tabs",
 				} else {
 					$hashTarget
 						.parent()
-							.find( "> ul [href$='" + hash + "']" )
-								.trigger( "click" );
+							.parent()
+								.find( "> ul [href$='" + hash + "']" )
+									.trigger( "click" );
 				}
 			}
 		}
@@ -822,19 +850,19 @@ $document.on( "click", selector + " [role=tabpanel] a", function( event ) {
 	var currentTarget = event.currentTarget,
 		href = currentTarget.getAttribute( "href" ),
 		which = event.which,
-		$container, $panel, $summary;
+		$tabpanels, $panel, $summary;
 
 	// Ignore middle and right mouse buttons
 	if ( ( !which || which === 1 ) && href.charAt( 0 ) === "#" ) {
-		$container = $( currentTarget ).closest( selector );
-		$panel = $container.find( href + "[role=tabpanel]" );
+		$tabpanels = $( currentTarget ).closest( ".tabpanels" );
+		$panel = $tabpanels.children( href );
 		if ( $panel.length !== 0 ) {
 			event.preventDefault();
 			$summary = $panel.children( "summary" );
 			if ( $summary.length !== 0 && $summary.attr( "aria-hidden" ) !== "true" ) {
 				$summary.trigger( "click" );
 			} else {
-				$container.find( href + "-lnk" ).trigger( "click" );
+				$tabpanels.find( href + "-lnk" ).trigger( "click" );
 			}
 		}
 	}
@@ -849,7 +877,7 @@ $window.on( "hashchange", onHashChange );
 $document.on( activateEvent, selector + " > .tabpanels > details > summary", function( event ) {
 	var which = event.which,
 		details = event.currentTarget.parentNode,
-		$details;
+		$details, $container;
 
 	if ( !( event.ctrlKey || event.altKey || event.metaKey ) &&
 		( !which || which === 1 || which === 13 || which === 32 ) ) {
@@ -865,8 +893,15 @@ $document.on( activateEvent, selector + " > .tabpanels > details > summary", fun
 		} catch ( error ) {
 		}
 
+		$container = $details.closest( selector );
+
+		// Update the URL hash if needed
+		if ( $container.data( componentName ).settings.updateHash ) {
+			updateHash( details );
+		}
+
 		// Identify that the tabbed interface was updated
-		$details.closest( selector ).trigger( updatedEvent, [ $details ] );
+		$container.trigger( updatedEvent, [ $details ] );
 	}
 });
 
